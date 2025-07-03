@@ -1,0 +1,67 @@
+:root {
+  font-family: var(--font-sans);
+}
+
+/* Estilo general de la página */
+body {
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Mensajes del asistente con ícono a la izquierda */
+.chainlit-message.assistant {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--primary)) !important;
+  padding-left: 60px; /* Espacio para el ícono */
+  position: relative;
+}
+
+.chainlit-message.assistant::before {
+  content: "";
+  background-image: url("/logo_us.png");
+  background-repeat: no-repeat;
+  background-size: cover;
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Mensajes del usuario */
+.chainlit-message.user {
+  background-color: hsl(var(--secondary)) !important;
+  color: hsl(var(--secondary-foreground)) !important;
+}
+
+/* Botones */
+button,
+.chainlit-button {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border: none;
+  border-radius: var(--radius);
+}
+
+button:hover,
+.chainlit-button:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+/* Encabezado con logo al lado del nombre */
+.header h1::before {
+  content: "";
+  display: inline-block;
+  background-image: url("/logo_us.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  width: 32px;
+  height: 32px;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+

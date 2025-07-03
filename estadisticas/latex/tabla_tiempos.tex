@@ -1,0 +1,41 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{margin=1in}
+\begin{document}
+\section*{Estadísticas de tiempo por módulo y total}
+
+\begin{table}[H]
+\centering
+\caption{Estadísticas de tiempo por módulo y total (minutos)}
+\begin{tabularx}{\textwidth}{lRRR}
+\toprule
+\textbf{Módulo} & \textbf{Media} & \textbf{Desviación típica} & \textbf{Correlación con total} \\
+\midrule
+analisis\_actitud\_maliciosa & 0.5413 & 0.1077 & 0.1517 \\
+chat\_rag\_buscar\_respuesta & 13.9228 & 2.1384 & 0.7524 \\
+evaluacion\_no\_rag & 1.1573 & 0.2698 & 0.6048 \\
+evaluacion\_rag & 4.6249 & 2.2009 & 0.7697 \\
+evaluacion\_relevancia & 0.7794 & 0.2831 & 0.3123 \\
+evaluacion\_traduccion & 0.7499 & 1.1357 & 0.4794 \\
+generar\_respuesta\_segura & 1.5667 & 1.3072 & 0.9702 \\
+responder\_no\_rag & 0.9632 & 0.2967 & 0.5400 \\
+resumen\_historial & 0.6213 & 0.4310 & 0.3144 \\
+saludo\_social\_o\_reexplicacion & 2.5972 & 1.6626 & -0.2720 \\
+traduccion & 1.3849 & 0.4403 & 0.1320 \\
+traduccion\_respuesta\_final & 1.0488 & 1.4605 & 0.4232 \\
+\midrule
+\textbf{Total} & 9.3267 & 6.9569 & N/A \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{C:/Master us/TFM/Implementacion/Final/Modelo/estadisticas/graficos/tiempos_por_modulo.png}
+\caption{Tiempo medio y desviación típica por módulo}
+\end{figure}
+\end{document}
