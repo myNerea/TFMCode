@@ -1,8 +1,8 @@
-import requests
+import aiohttp
 import json
 
 
-def son_parecidas_llm(texto1, texto2, modelo="llama3.2", umbral=0.85):
+async def son_parecidas_llm(texto1, texto2, modelo="llama3.2", umbral=0.85):
     """
     Usa un LLM para evaluar si dos textos son demasiado parecidos.
     Devuelve True si son similares (por encima del umbral), False si no.
@@ -35,17 +35,19 @@ def son_parecidas_llm(texto1, texto2, modelo="llama3.2", umbral=0.85):
 
     try:
         # Intentamos hacer la llamada al modelo
-        response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-        respuesta = ""
-        for line in response.iter_lines(decode_unicode=True):
-            if not line:
-                continue
-            try:
-                json_data = json.loads(line)
-                content = json_data.get("message", {}).get("content", "")
-                respuesta += content
-            except json.JSONDecodeError:
-                continue
+        async with aiohttp.ClientSession() as session:
+            async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                respuesta = ""
+                async for line in response.content:
+                    line = line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    try:
+                        json_data = json.loads(line)
+                        content = json_data.get("message", {}).get("content", "")
+                        respuesta += content
+                    except json.JSONDecodeError:
+                        continue
         
         # Recogemos la respuesta del modelo que será un número
         score = float(respuesta.strip().replace(",", "."))

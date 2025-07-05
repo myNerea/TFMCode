@@ -1,6 +1,7 @@
-import requests
+import asyncio
 import json
 import os
+import aiohttp
 from utils.embedding import obtener_embedding_ollama
 from utils.modelo_no_rag import responder_no_rag
 from utils.rag_search import cargar_vectorstore, buscar_chunks_relevantes
@@ -23,7 +24,7 @@ from evaluacion.scripts.latencia import Cronometro
 
 class AgenteDecisor:
     def __init__(self, umbral=0.5, top_k=3):
-        self.vectorstore = cargar_vectorstore()
+        self.vectorstore = None
         self.resumidor = ResumidorLlama() # Creamos una instancia de la clase resumidor. 
         # Guardandola como atributo de la clase actual para poder llamarla posteriormente.
         self.historial_conversacion = [] # Aquí iremos guardando el historial de la conversación.
@@ -35,8 +36,12 @@ class AgenteDecisor:
         self.esperando_aclaracion = False
         self.ultima_pregunta_original = None
 
+    async def init_async(self):
+        # Inicialización que requiere async (ej. cargar vectorstore)
+        self.vectorstore = await cargar_vectorstore()
+
     # Función para determinar si entrar o no en el RAG
-    def es_pregunta_relevante_llm(self, pregunta, resumen_historial, modelo="llama3.2"):
+    async def es_pregunta_relevante_llm(self, pregunta, resumen_historial, modelo="llama3.2"):
         """
         Consulta al modelo para determinar si debe entrar en módulo de RAG.
         El modelo responde sí/no a si la pregunta o comentario plantea algo relacionado con el doctorado.
@@ -72,29 +77,31 @@ class AgenteDecisor:
         try:
             # Llamamos al modelo en la URL definida anteriormente y le pasamos los datos(el prompt completo)
             # Stream=True permite que se vaya leyendo tal cual va llegando por líneas o por chunks
-            response = requests.post(url_api, json=data, stream=True)
-            if response.status_code == 200:
-                # Si obtenemos una respuesta satisfactora, la leemos
-                # Esta lectura se realiza línea a línea para evitar errores de formato JSON
-                respuesta_completa = ""
-                for line in response.iter_lines(decode_unicode=True):
-                    # decode_unicode=True decodifica cada línea de bytes a string (UTF-8)
-                    if line:
-                        try:
-                            json_data = json.loads(line)
-                            # Cada línea se intenta interpretar como JSON.
-                            content = json_data.get("message", {}).get("content", "")
-                            # Dentro del mensaje se extrae el contenido para guardarlo
-                            respuesta_completa += content
-                        except json.JSONDecodeError:
-                            pass
-                respuesta = respuesta_completa.strip().lower()
-                # Obtenmos las respuesta limpia(sin espacios delante o atrás y en minusculas)
-                return respuesta.startswith("sí") or respuesta.startswith("si")
-                # Devuelve True si la respuesta del modelo empieza por sí o por si y devuelve 
-                # False en caso contrario.
-            else:
-                print(f"⚠️ Error en API LLM: código {response.status_code}")
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url_api, json=data) as response:
+                    if response.status == 200:
+                        # Si obtenemos una respuesta satisfactora, la leemos
+                        # Esta lectura se realiza línea a línea para evitar errores de formato JSON
+                        respuesta_completa = ""
+                        async for line in response.content:
+                            # decode_unicode=True decodifica cada línea de bytes a string (UTF-8)
+                            line = line.decode("utf-8").strip()
+                            if line:
+                                try:
+                                    json_data = json.loads(line)
+                                    # Cada línea se intenta interpretar como JSON.
+                                    content = json_data.get("message", {}).get("content", "")
+                                    # Dentro del mensaje se extrae el contenido para guardarlo
+                                    respuesta_completa += content
+                                except json.JSONDecodeError:
+                                    pass
+                        respuesta = respuesta_completa.strip().lower()
+                        # Obtenmos las respuesta limpia(sin espacios delante o atrás y en minusculas)
+                        return respuesta.startswith("sí") or respuesta.startswith("si")
+                        # Devuelve True si la respuesta del modelo empieza por sí o por si y devuelve 
+                        # False en caso contrario.
+                    else:
+                        print(f"⚠️ Error en API LLM: código {response.status_code}")
         except Exception as e:
             print(f"⚠️ Error al consultar LLM para relevancia con historial: {e}")
 
@@ -102,7 +109,7 @@ class AgenteDecisor:
     
     # Función para determinar si es un saludo, despedida, o agradecimiento puro
     # Nota: El funcionamiento es igual que el anterior.
-    def es_saludo_social_llm(self, texto, modelo="llama3.2"):
+    async def es_saludo_social_llm(self, texto, modelo="llama3.2"):
         """
         Llama al LLM para detectar si el texto es UNICAMENTE es un saludo, despedida o agradecimiento.
         El modelo devuelve sí/no en función de si lo es o no.
@@ -130,21 +137,23 @@ Texto: "{texto}"
         }
 
         try:
-            response = requests.post(url_api, json=data, stream=True)
-            if response.status_code == 200:
-                respuesta_completa = ""
-                for line in response.iter_lines(decode_unicode=True):
-                    if line:
-                        try:
-                            json_data = json.loads(line)
-                            content = json_data.get("message", {}).get("content", "")
-                            respuesta_completa += content
-                        except json.JSONDecodeError:
-                            pass
-                respuesta = respuesta_completa.strip().lower()
-                return respuesta.startswith("sí") or respuesta.startswith("si")
-            else:
-                print(f"⚠️ Error en API LLM: código {response.status_code} en saludo social")
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url_api, json=data) as response:
+                    if response.status == 200:
+                        respuesta_completa = ""
+                        async for line in response.content:
+                            line = line.decode("utf-8").strip()
+                            if line:
+                                try:
+                                    json_data = json.loads(line)
+                                    content = json_data.get("message", {}).get("content", "")
+                                    respuesta_completa += content
+                                except json.JSONDecodeError:
+                                    pass
+                        respuesta = respuesta_completa.strip().lower()
+                        return respuesta.startswith("sí") or respuesta.startswith("si")
+                    else:
+                        print(f"⚠️ Error en API LLM: código {response.status_code} en saludo social")
         except Exception as e:
             print(f"⚠️ Error al consultar LLM para saludo social: {e}")
 
@@ -152,7 +161,7 @@ Texto: "{texto}"
 
     # Función para determinar si es necesaria una reexplicación
     # Nota: El funcionamiento es igual que el anterior
-    def debe_reexplicar_llm(self, pregunta_usuario, modelo="llama3.2"):
+    async def debe_reexplicar_llm(self, pregunta_usuario, modelo="llama3.2"):
         """
         Consulta al modelo para determinar si debe entrar en módulo de reexplicación.
         El modelo responde sí/no a si la pregunta o comentario indica que no ha entendido la respuesta previa.
@@ -178,21 +187,23 @@ Texto: "{texto}"
         }
 
         try:
-            response = requests.post(url_api, json=data, stream=True)
-            if response.status_code == 200:
-                respuesta_completa = ""
-                for line in response.iter_lines(decode_unicode=True):
-                    if line:
-                        try:
-                            json_data = json.loads(line)
-                            content = json_data.get("message", {}).get("content", "")
-                            respuesta_completa += content
-                        except json.JSONDecodeError:
-                            pass
-                respuesta = respuesta_completa.strip().lower()
-                return respuesta.startswith("sí") or respuesta.startswith("si")
-            else:
-                print(f"⚠️ Error en API LLM para decidir reexplicación: código {response.status_code}")
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url_api, json=data) as response:
+                    if response.status == 200:
+                        respuesta_completa = ""
+                        async for line in response.content:
+                            line = line.decode("utf-8").strip()
+                            if line:
+                                try:
+                                    json_data = json.loads(line)
+                                    content = json_data.get("message", {}).get("content", "")
+                                    respuesta_completa += content
+                                except json.JSONDecodeError:
+                                    pass
+                        respuesta = respuesta_completa.strip().lower()
+                        return respuesta.startswith("sí") or respuesta.startswith("si")
+                    else:
+                        print(f"⚠️ Error en API LLM para decidir reexplicación: código {response.status_code}")
         except Exception as e:
             print(f"⚠️ Error al consultar LLM para decidir reexplicación: {e}")
 
@@ -200,7 +211,7 @@ Texto: "{texto}"
 
 
     # Función que genera la respuesta para el usuario
-    def responder(self, pregunta_usuario):
+    async def responder(self, pregunta_usuario):
         """
         Esta función se encarga de generar la respuesta que recibirá el usuario.
         """
@@ -215,7 +226,7 @@ Texto: "{texto}"
         # Iniciamos el context manager para medir el tiempo que tarda en el módulo de traducción.
         with cronometro.medir("traduccion"):
             # Llamamos a la función para preparar la pregunta que se encuentra en traduccion_pregunta.py
-            pregunta_traducida, idioma_original, mezcla = preparar_pregunta(pregunta_usuario)
+            pregunta_traducida, idioma_original, mezcla = await preparar_pregunta(pregunta_usuario)
 
         # Salimos del contexto manager creado para traduccion al terminar la indentacion por lo que se guarda
         # el tiempo que hemos tardado en traducirlo.
@@ -228,7 +239,7 @@ Texto: "{texto}"
         with cronometro.medir("analisis_actitud_maliciosa"):
             # Llamamos a la función de prevencion.py para ver si el usuario tiene o no una actitud maliciosa
             # En caso de ser True la respuesta de la función entra dentro del bloque if
-            if analizar_actitud_maliciosa(pregunta_traducida):
+            if await analizar_actitud_maliciosa(pregunta_traducida):
                 print("⚠️ Se detectó intento de manipulación, se genera respuesta segura.")
                 # Entramos en otro with para medir el tiempo que tarda en generar la respuesta segura
                 # Téngase en cuenta, que del primero no se sale hasta que no termine su bloque, el cual termina
@@ -239,7 +250,7 @@ Texto: "{texto}"
                     # Comprobamos si no era español y no tenía mezcla
                     if idioma_original != "español":
                         # En este caso nos vamos a la funcion de traduccion_respuesta.py
-                        respuesta_final = traducir_respuesta(respuesta_segura, idioma_original)
+                        respuesta_final = await traducir_respuesta(respuesta_segura, idioma_original)
                     else:
                         respuesta_final = respuesta_segura
 
@@ -264,13 +275,13 @@ Texto: "{texto}"
         with cronometro.medir("saludo_social_o_reexplicacion"):
             # En el caso de que la función decisora (definida en este archivo) determine que la pregunta del
             # usuario es un fórmula de cortesía, entonces entramos aquí.
-            if self.es_saludo_social_llm(pregunta_traducida):
+            if await self.es_saludo_social_llm(pregunta_traducida):
                 # medimos cuanto tiempo se tarda en dar la respuesta y en generar su evaluacion en el módulo
                 # social.
                 with cronometro.medir("saludo_social"):
                     # Usamos la función que se encuentra en social.py
                     # Esta función nos devuelve la respuesta del modelo social (que es un texto).
-                    respuesta_es = modulo_social(pregunta_traducida)
+                    respuesta_es = await modulo_social(pregunta_traducida)
                     print("✅ Módulo social generó respuesta.")
                     # Iniciamos la evaluación de la respuesta dada por el modelo.
                     try:
@@ -278,7 +289,7 @@ Texto: "{texto}"
                         with cronometro.medir("evaluacion_saludo"):
                             # Usamos la función que se puede encontrar en evaluador_generativo.py
                             # Esto obtiene un JSON con los valores de la evaluacion
-                            evaluacion_social = evaluar_saludo_social(pregunta_traducida, respuesta_es)
+                            evaluacion_social = await evaluar_saludo_social(pregunta_traducida, respuesta_es)
                             print("\n🤝 Evaluación de saludo social:")
                             # Imprimimos el json
                             print(json.dumps(evaluacion_social, indent=2, ensure_ascii=False))
@@ -306,7 +317,7 @@ Texto: "{texto}"
             # indica que esta es necesaria.
             # En caso de serlo, entramos en a dar la reexplicacion.
             elif self.historial_conversacion:
-                necesita_reexplicacion = self.debe_reexplicar_llm(pregunta_traducida)
+                necesita_reexplicacion = await self.debe_reexplicar_llm(pregunta_traducida)
                 if necesita_reexplicacion:
                     # Medimos cuánto tiempo tarda en dar una respuesta reexplicada y su evaluación
                     with cronometro.medir("reexplicacion"):
@@ -317,7 +328,7 @@ Texto: "{texto}"
                         ultimo_mensaje = self.historial_conversacion[-1]["respuesta"]
                         # Generamos la reexplicación a partir del último mensaje del sistema usando la función que 
                         # se encuentra en modulo_reexplicacion.py
-                        respuesta_es = modulo_reexplicacion(ultimo_mensaje)
+                        respuesta_es = await modulo_reexplicacion(ultimo_mensaje)
                         # Ahora pasamos a la evaluación de este módulo.
                         # Nota: Esta solo se hace cuando el modelo da una respuesta, es decir, cuando hay historial
                         # previo.
@@ -325,7 +336,7 @@ Texto: "{texto}"
                             # Medimos cuanto tiempo tarda en generar la evaluacion
                             with cronometro.medir("evaluacion_reexplicacion"):
                                 # Esta función se encuentra en evaluador_generativo.py
-                                evaluacion_reexplicacion = evaluar_reexplicacion(ultimo_mensaje, respuesta_es)
+                                evaluacion_reexplicacion = await evaluar_reexplicacion(ultimo_mensaje, respuesta_es)
                                 print("\n🔍 Evaluación de reexplicación:")
                                 print(json.dumps(evaluacion_reexplicacion, indent=2, ensure_ascii=False))
 
@@ -345,7 +356,7 @@ Texto: "{texto}"
             # Entonces carga el modelo que comprueba la reexplicacion y si es necesaria da una respuesta por defecto
             # Téngase en cuenta, que tal y como lo hemos hecho se entra en el modelo que lo comprueba una sola vez
             else:
-                necesita_reexplicacion = self.debe_reexplicar_llm(pregunta_traducida)
+                necesita_reexplicacion = await self.debe_reexplicar_llm(pregunta_traducida)
                 if necesita_reexplicacion:
                     print("🔄 Se detectó que el usuario no comprendió, entrando en módulo de reexplicación.")
                     respuesta_es = "Disculpe, pero no hay ningún mensaje previo que pueda explicarle. ¿Puedo ayudarle en algo más?"
@@ -368,7 +379,7 @@ Texto: "{texto}"
                     # Para poder llamarla, hemos tenido que unir el contexto en respuesta y pregunta en una tupla
                     # la función recibe como parámetro un único texto.
                     # a su vez llama a la función para obtener un resumen y nos devuelve el resumen del historial
-                    historial_resumido = self.resumidor.obtener_contexto_previo(lista_preg_resp, self.historial_resumen)
+                    historial_resumido = await self.resumidor.obtener_contexto_previo(lista_preg_resp, self.historial_resumen)
                     # Nos guardamos nuestro nuevo historial
                     self.historial_resumen = historial_resumido
 
@@ -380,7 +391,7 @@ Texto: "{texto}"
             # Ahora vamos a determinar si una pregunta es o no relevante para el RAG.
             with cronometro.medir("evaluacion_relevancia"):
                 # Para hacer la comprobación usamos una de las funciones definidas en este archivo.
-                relevante = self.es_pregunta_relevante_llm(pregunta_traducida, historial_resumido)
+                relevante = await self.es_pregunta_relevante_llm(pregunta_traducida, historial_resumido)
 
             # En caso de ser relevante para RAG entramos en el siguiente módulo
             if relevante:
@@ -394,7 +405,7 @@ Texto: "{texto}"
                 with cronometro.medir("chat_rag_buscar_respuesta"):
                     # Llamamos a la función buscar respuesta que se encuentra dentro de la instancia creada en
                     # chatDoctorado.py
-                    respuesta_es, chunks_rankeados = self.chat_rag.buscar_respuesta(
+                    respuesta_es, chunks_rankeados = await self.chat_rag.buscar_respuesta(
                         pregunta_traducida,
                         self.vectorstore,
                         top_k=self.top_k,
@@ -402,7 +413,7 @@ Texto: "{texto}"
                     )
 
                 # Si el modelo generativo devuelve la respuesta de que no tiene información, entramos en el if
-                if "Lo siento, no tengo información" in respuesta_es:
+                if "Lo siento, no tengo información" in respuesta_es or not chunks_rankeados:
                     # Indicamos que espera una aclaracion
                     self.esperando_aclaracion = True
                     # Guardamos la última pregunta realizada
@@ -412,7 +423,7 @@ Texto: "{texto}"
                     with cronometro.medir("generar_pregunta_clarificacion"):
                         # Nos vamos ahora a la funcion que se encuentra en clarificador.py
                         # Esto nos da un texto, en concreto una pregunta.
-                        respuesta_es = generar_pregunta_clarificacion(pregunta_traducida)
+                        respuesta_es = await generar_pregunta_clarificacion(pregunta_traducida)
                         # Iniciamos el cronometro para ver cuanto tarda en realizar la evaluacion
                         with cronometro.medir("evaluacion_clarificacion"):
                             try:
@@ -420,7 +431,7 @@ Texto: "{texto}"
                                 # Nos devolverá un JSON aunque se produzcan fallos.
                                 # Le damos la pregunta inicial del usuario, y la pregunta para realizar la expansión
                                 # que hemos generado
-                                evaluacion_clarificacion = evaluar_pregunta_clarificacion(pregunta_traducida, respuesta_es)
+                                evaluacion_clarificacion = await evaluar_pregunta_clarificacion(pregunta_traducida, respuesta_es)
                                 print("\n🧩 Evaluación de pregunta clarificadora:")
                                 # Lo convertimos a objeto JSON
                                 print(json.dumps(evaluacion_clarificacion, indent=2, ensure_ascii=False))
@@ -453,7 +464,7 @@ Texto: "{texto}"
                         try:
                             # Obtener los chunks relevantes mediante el uso de la funcion en evaluador_rag.py
                             # Esto devuelve todos los chunks cuyo valor de similitud con la pregunta supera el dado
-                            chunks_relevantes = obtener_todos_los_chunks_relevantes(
+                            chunks_relevantes = await obtener_todos_los_chunks_relevantes(
                                 pregunta_traducida,
                                 self.vectorstore,
                                 umbral_similitud=0.75
@@ -468,7 +479,7 @@ Texto: "{texto}"
                             chunks_reranking = [(url, ch) for url, ch, sc in chunks_rankeados]
 
                             # Le pasamos todos a la función dentro de evaluador_rag.py
-                            evaluacion = evaluar_respuesta_con_llm(
+                            evaluacion = await evaluar_respuesta_con_llm(
                                 pregunta_traducida,
                                 respuesta_es,
                                 chunks_rag,
@@ -519,7 +530,7 @@ Texto: "{texto}"
                 # Iniciamos el cronometro para medir el tiempo que se tarda en el no rag
                 with cronometro.medir("responder_no_rag"):
                     # Llamamos a la funcion en modelo_no_rag.py
-                    respuesta_es = responder_no_rag(pregunta_traducida)
+                    respuesta_es = await responder_no_rag(pregunta_traducida)
                     # Lo anterior nos devuelve siempre un texto.
 
                 # Iniciamos el cronómetro para medir el tiempo que se tarda en evaluar esta parte de respuesta
@@ -528,7 +539,7 @@ Texto: "{texto}"
                     try:
                         # Realizamos la evaluacion de la respuesta general a partir de la función que podemos encontrar
                         # en evaluador_generativo.py
-                        evaluacion_no_rag = evaluar_respuesta_no_rag(pregunta_traducida, respuesta_es)
+                        evaluacion_no_rag = await evaluar_respuesta_no_rag(pregunta_traducida, respuesta_es)
                         print("\n📋 Evaluación modelo sin RAG:")
                         # Esto nso devuelve un JSON con la evaluación del modelo
                         print(json.dumps(evaluacion_no_rag, indent=2, ensure_ascii=False))
@@ -568,7 +579,7 @@ Texto: "{texto}"
             if idioma_destino != "español":
                 # En caso de no ser el idioma el español, llamamos a la función que se encuentra en traduccion_respuesta.py
                 # Esta nos devuelve el texto traducido al idioma correspondiente
-                respuesta_final = traducir_respuesta(respuesta_es, idioma_destino)
+                respuesta_final = await traducir_respuesta(respuesta_es, idioma_destino)
                 print(f"✅ Respuesta traducida del español a: {idioma_destino}")
             else:
                 # en caso contrario, la respuesta final será la respuesta original ya que no habría que traducirla
@@ -582,7 +593,7 @@ Texto: "{texto}"
             if idioma_original != "español":
                 try:
                     # Llamamos a la funcion en evaluador_traduccion.py, que nos devolverá un JSON
-                    resultado_eval = evaluar_traduccion(
+                    resultado_eval = await evaluar_traduccion(
                         texto=pregunta_usuario,
                         respuesta=respuesta_es,
                         src_lang=idioma_original,
@@ -633,7 +644,7 @@ Texto: "{texto}"
         self.ultima_pregunta_original = None
         print("🔄 Contexto reiniciado. Puedes empezar una nueva consulta.")
 
-    def chat_interactivo(self):
+    async def chat_interactivo(self):
         """
         Llamamos al chat con el modelo.
         
@@ -643,11 +654,12 @@ Texto: "{texto}"
             "💬 Chat con AsistenteUS (escribe 'salir', 'exit', 'quit' para salir o 'reiniciar' para empezar de nuevo): \n"
             "Soy el asistente virtual de la Universidad de Sevilla sobre temas de doctorados. \n ¿En qué puedo ayudarte?"
         )
-
+        loop = asyncio.get_running_loop()
         # Mientras que el usuario no se salga
         while True:
             # Recogemos el input del usuario
-            user_input = input("\n👤 Tú: ").strip()
+            user_input = await loop.run_in_executor(None, input, "\n👤 Tú: ")
+            user_input = user_input.strip()
             # Si dice de salir entonces reiniciamos el contexto y salimos de la conversación, para dejarlo
             # limpio para la próxima.
             if user_input.lower() in ["salir", "exit", "quit"]:
@@ -659,11 +671,11 @@ Texto: "{texto}"
                 self.reiniciar_contexto()
                 continue
             # Cualquier otra cosa, llamamos a la función responder definida anteriormente
-            resultado = self.responder(user_input)
+            resultado = await self.responder(user_input)
             # Devolvemos la respuesta guardada en el json de resultado al usuario
             print(f"\n🧠 AsistenteUS: {resultado['respuesta']}")
 
 
 if __name__ == "__main__":
     agente = AgenteDecisor(top_k=5)
-    agente.chat_interactivo()
+    asyncio.run(agente.chat_interactivo())

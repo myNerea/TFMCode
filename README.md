@@ -17,6 +17,6 @@ Modelo Embedding: ollama pull mxbai-embed-large
 
 
 **Paso 3:** Cargar función principal:
-python agente_decisor.py
+chainlit run main.py
 
 **Paso 4:** ¡Disfrute de sus consultas!, y trate de no romperlo 😉.

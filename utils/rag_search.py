@@ -1,6 +1,8 @@
 import os
 import json
 import numpy as np
+import aiofiles # Para ficheros muy grandes
+import aiohttp # Para peticiones http
 from utils.embedding import obtener_embedding_ollama
 
 # Guardamos la ruta absoluta de este archivo
@@ -10,7 +12,7 @@ INDEX_DIR = os.path.join(BASE_DIR, "index")
 # A partir de la ruta anterior hacemos la búsqueda de el archivo vectorstore
 VECTORSTORE_PATH = os.path.join(INDEX_DIR, "vectorstore.json")
 
-def cargar_vectorstore():
+async def cargar_vectorstore():
     """
     Función para cargar la base de datos vectorial.
     
@@ -20,8 +22,9 @@ def cargar_vectorstore():
     if not os.path.exists(VECTORSTORE_PATH):
         raise FileNotFoundError("❌ El archivo vectorstore.json no existe. Ejecuta embedding.py primero.")
     # En caso de que si encuentre la base vectorial, la abre y la devuelve como objeto json
-    with open(VECTORSTORE_PATH, "r") as f:
-        return json.load(f)
+    async with aiofiles.open(VECTORSTORE_PATH, mode='r') as f:
+        contenido = await f.read()
+        return json.loads(contenido)
     
 
 def similitud_coseno(v1, v2):
@@ -41,7 +44,7 @@ def similitud_coseno(v1, v2):
         return 0
     return dot_product / (norm1 * norm2)
 
-def buscar_chunks_relevantes(pregunta, vectorstore=None, top_k=3, modelo="mxbai-embed-large"):
+async def buscar_chunks_relevantes(pregunta, vectorstore=None, top_k=3, modelo="mxbai-embed-large"):
     """
     Función para obtener los k chunks más cercanos de la base de datos a la pregunta en base a la 
     similitud coseno.
@@ -50,10 +53,10 @@ def buscar_chunks_relevantes(pregunta, vectorstore=None, top_k=3, modelo="mxbai-
     # Por defecto ponemos el vectorstore como None. Así, en caso de no encontrarlo llama a la función anterior
     # para que lo cargue.
     if vectorstore is None:
-        vectorstore = cargar_vectorstore()
+        vectorstore = await cargar_vectorstore()
 
     # Creamos los embedding de la pregunta usando la funcion que se encuentra en embedding.py
-    embedding_pregunta = np.array(obtener_embedding_ollama(pregunta, modelo)).astype("float32")
+    embedding_pregunta = np.array(await obtener_embedding_ollama(pregunta, modelo)).astype("float32")
     # Creamos una lista vacia para guardar los chunks que sean similares a la pregunta
     chunks_similares = []
 

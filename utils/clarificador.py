@@ -1,7 +1,7 @@
-import requests
+import aiohttp
 import json
 
-def generar_pregunta_clarificacion(pregunta_original: str, modelo="llama3.2") -> str:
+async def generar_pregunta_clarificacion(pregunta_original: str, modelo="llama3.2") -> str:
     """
     Usa un modelo de lenguaje para generar siempre una pregunta intermedia
     que ayude a aclarar o expandir la pregunta original.
@@ -30,20 +30,21 @@ def generar_pregunta_clarificacion(pregunta_original: str, modelo="llama3.2") ->
     }
 
     try:
-        response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-        response.raise_for_status()
+        async with aiohttp.ClientSession() as session:
+                async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                    aclaracion = ""
+                    if response.status == 200:        
+                        async for line in response.content:
+                            line = line.decode("utf-8").strip()
+                            if line:
+                                try:
+                                    json_data = json.loads(line)
+                                    contenido = json_data.get("message", {}).get("content", "")
+                                    aclaracion += contenido
+                                except json.JSONDecodeError:
+                                    continue
 
-        aclaracion = ""
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                try:
-                    json_data = json.loads(line)
-                    contenido = json_data.get("message", {}).get("content", "")
-                    aclaracion += contenido
-                except json.JSONDecodeError:
-                    continue
-
-        return aclaracion.strip()
+                        return aclaracion.strip()
 
     except Exception as e:
         print(f"❌ Error llamando al modelo para generar pregunta de clarificación: {e}")

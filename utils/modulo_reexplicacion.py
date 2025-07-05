@@ -48,4 +48,3 @@ async def modulo_reexplicacion(mensaje_modelo_anterior, modelo="llama3.2"):
     except Exception as e:
         print(f"❌ Error en módulo de reexplicación: {e}")
         return "Disculpe, ha ocurrido un error al intentar explicarle el mensaje. ¿Desea que lo intente de nuevo?"
-

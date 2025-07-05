@@ -1,5 +1,5 @@
 import json
-import requests
+import aiohttp
 import re
 
 
@@ -40,7 +40,7 @@ def limpiar_json_de_llm(respuesta_cruda):
         return respuesta_cruda
 
 
-def evaluar_saludo_social(input_usuario, respuesta_generada, modelo="llama3.2"):
+async def evaluar_saludo_social(input_usuario, respuesta_generada, modelo="llama3.2"):
     """
     Esta función se encarga de evaluar la actuación del modelo al responder cuando entra en el módulo social.
     Recibe el input del usuario y la respuesta generada.
@@ -78,7 +78,7 @@ Respuesta del asistente:
 
     # Usamos la función que definimos abajo para llamar al modelo. Esto se hace pasandole el prompt y el modelo
     # correspondiente que vamos a usar.
-    respuesta_cruda = _llamar_llm(prompt, modelo)
+    respuesta_cruda = await _llamar_llm(prompt, modelo)
 
     # Limpiar la respuesta para eliminar bloques de código u otros textos extra
     resultado_limpio = limpiar_json_de_llm(respuesta_cruda)
@@ -100,7 +100,7 @@ Respuesta del asistente:
     return resultado
 
 # En la siguiente función definimos el prompt necesario para generar la respuesta.
-def evaluar_reexplicacion(texto_original, texto_reexplicado, modelo="llama3.2"):
+async def evaluar_reexplicacion(texto_original, texto_reexplicado, modelo="llama3.2"):
     """
     Esta función se encarga de evaluar la actuación del modelo al responder cuando entra en el módulo de reexplicacion.
     Recibe el input del usuario y la respuesta generada.
@@ -129,10 +129,10 @@ Reexplicación generada:
 {texto_reexplicado}
 """.strip()
 
-    return _llamar_llm(prompt, modelo)
+    return await _llamar_llm(prompt, modelo)
 
 
-def evaluar_respuesta_no_rag(pregunta, respuesta, modelo="llama3.2"):
+async def evaluar_respuesta_no_rag(pregunta, respuesta, modelo="llama3.2"):
     """
     Evalúa la calidad de la respuesta generada cuando el modelo responde sin contexto RAG.
     Devuelve únicamente un JSON con campos para evaluar relevancia, claridad y coherencia.
@@ -157,7 +157,7 @@ Respuesta generada:
 """.strip()
 
     # Guardamos la respuesta del modelo
-    respuesta_cruda = _llamar_llm(prompt, modelo)
+    respuesta_cruda = await _llamar_llm(prompt, modelo)
     # Limpiamos la respuesta del modelo
     resultado_limpio = limpiar_json_de_llm(respuesta_cruda)
 
@@ -177,7 +177,7 @@ Respuesta generada:
     return resultado
 
 
-def evaluar_pregunta_clarificacion(pregunta_original, pregunta_clarificadora, modelo="llama3.2"):
+async def evaluar_pregunta_clarificacion(pregunta_original, pregunta_clarificadora, modelo="llama3.2"):
     """
     Evalúa la calidad de una pregunta clarificadora generada para solicitar más información al usuario.
     Devuelve un JSON con campos para evaluar pertinencia, claridad y utilidad.
@@ -202,7 +202,7 @@ Pregunta clarificadora generada:
 """.strip()
 
     # Obtenemos la respuesta del modelo llamando a la función definida abajo
-    respuesta_cruda = _llamar_llm(prompt, modelo)
+    respuesta_cruda = await _llamar_llm(prompt, modelo)
     # Limpiamos la respuesta
     resultado_limpio = limpiar_json_de_llm(respuesta_cruda)
 
@@ -221,7 +221,7 @@ Pregunta clarificadora generada:
     return resultado
 
 
-def _llamar_llm(prompt, modelo):
+async def _llamar_llm(prompt, modelo):
     """
     Esta función llama al modelo pasandole el prompt correspondiente. 
     Devuelve un JSON válido.
@@ -241,16 +241,18 @@ def _llamar_llm(prompt, modelo):
 
     respuesta_llm = ""
     try:
-        response = requests.post(url_api, json=data, stream=True)
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                try:
-                    json_data = json.loads(line)
-                    contenido = json_data.get("message", {}).get("content", "")
-                    respuesta_llm += contenido
-                except json.JSONDecodeError:
-                    continue
-        # Devolvemos la respuesta como un JSON.
-        return json.loads(respuesta_llm)
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url_api, json=data) as response:
+                async for line in response.content:
+                    line = line.decode('utf-8').strip()
+                    if line:
+                        try:
+                            json_data = json.loads(line)
+                            contenido = json_data.get("message", {}).get("content", "")
+                            respuesta_llm += contenido
+                        except json.JSONDecodeError:
+                            continue
+                # Devolvemos la respuesta como un JSON.
+                return json.loads(respuesta_llm)
     except Exception as e:
         return {"error": str(e), "respuesta_cruda": respuesta_llm}

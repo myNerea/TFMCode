@@ -1,8 +1,8 @@
-import requests
+import aiohttp
 import json
 from utils.utils_idiomas import detectar_idioma_llm  # Asegúrate de que está disponible
 
-def traducir_desde_espanol_llm(texto, idioma_destino, modelo="llama3.2"):
+async def traducir_desde_espanol_llm(texto, idioma_destino, modelo="llama3.2"):
     """
     Traduce un texto desde español a otro idioma usando un LLM.
     Verifca que la salida este en el idioma deseado. En caso contrario salta un aviso.
@@ -28,43 +28,45 @@ def traducir_desde_espanol_llm(texto, idioma_destino, modelo="llama3.2"):
     }
 
     try:
-        response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-        response.raise_for_status()
+        async with aiohttp.ClientSession() as session:
+            async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                response.raise_for_status()
 
-        traduccion = ""
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                try:
-                    json_data = json.loads(line)
-                    contenido = json_data.get("message", {}).get("content", "")
-                    traduccion += contenido
-                except json.JSONDecodeError:
-                    pass
+                traduccion = ""
+                async for line in response.content:
+                    line = line.decode("utf-8").strip()
+                    if line:
+                        try:
+                            json_data = json.loads(line)
+                            contenido = json_data.get("message", {}).get("content", "")
+                            traduccion += contenido
+                        except json.JSONDecodeError:
+                            pass
 
-        # Devolvemos la traducción sin espacios por delante y por detrás.
-        traduccion = traduccion.strip()
+                # Devolvemos la traducción sin espacios por delante y por detrás.
+                traduccion = traduccion.strip()
 
-        # Devolvemos la traducción.
-        print(f"🌍 Traducción {traduccion}")
-        # Validamos que el idioma detectado coincide con el destino.
-        # Para ello, llamamos a la función de detección del idioma utilizada antes.
-        info_validacion = detectar_idioma_llm(traduccion)
-        # Intenta obtener el valor cuya clave del diccionario es idioma_detectado, si no la encuentra, devuelve
-        # la cadena vacia.
-        idioma_detectado = info_validacion.get("idioma_detectado", "")
+                # Devolvemos la traducción.
+                print(f"🌍 Traducción {traduccion}")
+                # Validamos que el idioma detectado coincide con el destino.
+                # Para ello, llamamos a la función de detección del idioma utilizada antes.
+                info_validacion = await detectar_idioma_llm(traduccion)
+                # Intenta obtener el valor cuya clave del diccionario es idioma_detectado, si no la encuentra, devuelve
+                # la cadena vacia.
+                idioma_detectado = info_validacion.get("idioma_detectado", "")
 
-        if idioma_detectado != idioma_destino:
-            print(f"⚠️ Traducción fallida: se esperaba '{idioma_destino}', pero se detectó '{idioma_detectado}'")
+                if idioma_detectado != idioma_destino:
+                    print(f"⚠️ Traducción fallida: se esperaba '{idioma_destino}', pero se detectó '{idioma_detectado}'")
 
-        # Devolvemos la traducción.
-        return traduccion
+                # Devolvemos la traducción.
+                return traduccion
 
     except Exception as e:
         print(f"❌ Error en traducción LLM: {e}")
         return texto
 
 
-def traducir_respuesta(respuesta, idioma_destino, modelo="llama3.2"):
+async def traducir_respuesta(respuesta, idioma_destino, modelo="llama3.2"):
     """
     Llama a la función para traducir la respuesta al idioma destino si este es distinto del español.
     Si el idioma destino es 'español', no se hace nada.
@@ -76,4 +78,4 @@ def traducir_respuesta(respuesta, idioma_destino, modelo="llama3.2"):
         return respuesta
     # En caso de que el idioma de destino sea distinto del español entonces llamamos al modelo para realizar
     # la traduccion
-    return traducir_desde_espanol_llm(respuesta, idioma_destino, modelo=modelo)
+    return await traducir_desde_espanol_llm(respuesta, idioma_destino, modelo=modelo)

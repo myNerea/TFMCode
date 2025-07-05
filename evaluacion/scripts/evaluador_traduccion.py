@@ -1,11 +1,11 @@
-import requests
+import aiohttp
 import json
 from utils.embedding import obtener_embedding_ollama
 from utils.rag_search import similitud_coseno
 
 OLLAMA_URL = "http://localhost:11434"
 
-def llama_call(prompt: str, model: str) -> str:
+async def llama_call(prompt: str, model: str) -> str:
     """
     Función para realizar la llama POST al modelo.
     Recibe:
@@ -26,22 +26,24 @@ def llama_call(prompt: str, model: str) -> str:
             {"role": "user", "content": prompt}
         ]
     }
-    response = requests.post(f"{OLLAMA_URL}/api/chat", json=data, stream=True)
-    response.raise_for_status()
-
     traduccion = ""
-    for line in response.iter_lines(decode_unicode=True):
-        if line:
-            try:
-                json_data = json.loads(line)
-                contenido = json_data.get("message", {}).get("content", "")
-                traduccion += contenido
-            except json.JSONDecodeError:
-                pass
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f"{OLLAMA_URL}/api/chat", json=data) as response:
+            response.raise_for_status()
+    
+            async for line in response.content:
+                line = line.decode("utf-8").strip()
+                if line:
+                    try:
+                        json_data = json.loads(line)
+                        contenido = json_data.get("message", {}).get("content", "")
+                        traduccion += contenido
+                    except json.JSONDecodeError:
+                        pass
     # Devuelve la traducción eliminando espacios que se hayan podido generar delante o detrás de la frase.
     return traduccion.strip()
 
-def translate(text: str, source_lang: str, target_lang: str) -> str:
+async def translate(text: str, source_lang: str, target_lang: str) -> str:
     """
     Devuelve la traducción del texto al idioma correspondiente.
     
@@ -53,10 +55,10 @@ def translate(text: str, source_lang: str, target_lang: str) -> str:
         f"{text}"
     )
 
-    return llama_call(prompt, model="llama3.2")
+    return await llama_call(prompt, model="llama3.2")
 
 
-def evaluar_traduccion(texto: str, respuesta: str, src_lang: str = "español", tgt_lang: str = "inglés") -> dict:
+async def evaluar_traduccion(texto: str, respuesta: str, src_lang: str = "español", tgt_lang: str = "inglés") -> dict:
     """
     Evalúa traducciones para pregunta y respuesta
     Recibe la pregunta y la respuesta, y devuelve la similitud coseno entre los embedding de ambas. Esto nos dice
@@ -64,16 +66,16 @@ def evaluar_traduccion(texto: str, respuesta: str, src_lang: str = "español", t
     """
     try:
         # Traducción pregunta
-        traducido_pregunta = translate(texto, src_lang, tgt_lang)
-        emb_original_preg = obtener_embedding_ollama(texto)
-        emb_trad_preg = obtener_embedding_ollama(traducido_pregunta)
+        traducido_pregunta = await translate(texto, src_lang, tgt_lang)
+        emb_original_preg = await obtener_embedding_ollama(texto)
+        emb_trad_preg = await obtener_embedding_ollama(traducido_pregunta)
         # Calculamos la similitud coseno
         score_pregunta = similitud_coseno(emb_original_preg,emb_trad_preg)
 
         # Traducción respuesta
-        traducido_respuesta = translate(respuesta, src_lang, tgt_lang)
-        emb_original_resp = obtener_embedding_ollama(respuesta)
-        emb_trad_resp = obtener_embedding_ollama(traducido_respuesta)
+        traducido_respuesta = await translate(respuesta, src_lang, tgt_lang)
+        emb_original_resp = await obtener_embedding_ollama(respuesta)
+        emb_trad_resp = await obtener_embedding_ollama(traducido_respuesta)
         score_respuesta = similitud_coseno(emb_original_resp,emb_trad_resp)
 
         return {

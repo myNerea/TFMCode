@@ -1,7 +1,7 @@
-import requests
+import aiohttp
 import json
 
-def modulo_social(texto_usuario, modelo="llama3.2"):
+async def modulo_social(texto_usuario, modelo="llama3.2"):
     """
     Mediante un modelo Llama3.2 damos una respuesta concreta a cada una de las fórmulas de cortesía que el
     usuario pueda plantear.
@@ -65,22 +65,24 @@ Respuesta:
     }
 
     try:
-        response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-        response.raise_for_status()
-
-        respuesta_completa = ""
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                try:
-                    json_data = json.loads(line)
-                    contenido = json_data.get("message", {}).get("content", "")
-                    respuesta_completa += contenido
-                except json.JSONDecodeError:
-                    pass
-
-        # Devolvemos la respuesta dada por el modelo sin espacios delante o detrás.
-        texto_respuesta = respuesta_completa.strip()
-        return texto_respuesta
+        async with aiohttp.ClientSession() as session:
+            async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                if response.status == 200:
+                    respuesta_completa = ""
+                    async for line in response.content:
+                        line = line.decode("utf-8").strip()
+                        if line:
+                            try:
+                                json_data = json.loads(line)
+                                contenido = json_data.get("message", {}).get("content", "")
+                                respuesta_completa += contenido
+                            except json.JSONDecodeError:
+                                pass
+                    # Devolvemos la respuesta dada por el modelo sin espacios delante o detrás.
+                    texto_respuesta = respuesta_completa.strip()
+                    return texto_respuesta
+                else:
+                    print(f"⚠️ Error en módulo social: código {response.status}")
 
     except Exception as e:
         print(f"Error en módulo social: {e}")

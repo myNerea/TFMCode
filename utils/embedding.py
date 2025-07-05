@@ -1,5 +1,7 @@
 import os
 import json
+import aiohttp
+import asyncio
 import requests
 import hashlib
 import io
@@ -320,7 +322,7 @@ def dividir_en_chunks(texto, max_tokens=MAX_TOKEN, token_overlap=OVERLAP, idioma
     return chunks
 
 
-def obtener_embedding_ollama(texto, modelo="mxbai-embed-large"):
+async def obtener_embedding_ollama(texto, modelo="mxbai-embed-large"):
     """
     Función para obtener la representación vectorial de las frases.
     
@@ -328,13 +330,16 @@ def obtener_embedding_ollama(texto, modelo="mxbai-embed-large"):
 
     url = "http://localhost:11434/api/embeddings"
     data = {"model": modelo, "prompt": texto}
-    response = requests.post(url, json=data)
-    if response.status_code == 200:
-        # En el caso de que la petición haya ido bien, devolvemos los embedding obtenidos
-        return response.json()["embedding"]
-    else:
-        # Si ha ido mal devolvemos un error.
-        raise Exception(f"❌ Error al generar embedding: {response.text}")
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data) as response:
+            if response.status == 200:
+                # En el caso de que la petición haya ido bien, devolvemos los embedding obtenidos
+                respuesta_json = await response.json()
+                return respuesta_json["embedding"]
+            else:
+                # Si ha ido mal devolvemos un error.
+                texto_error = await response.text()
+                raise Exception(f"❌ Error al generar embedding: {texto_error}")
 
 def cargar_vectorstore():
     """
@@ -357,13 +362,13 @@ def guardar_vectorstore(vectorstore):
     with open(VECTORSTORE_PATH, "w") as f:
         json.dump(vectorstore, f, indent=2)
 
-def procesar_una_pagina_y_recursos(url_principal):
+async def procesar_una_pagina_y_recursos(url_principal):
     # Cargamos la base de datos vectorial existente (si es que existe)
     vectorstore = cargar_vectorstore()
     # Creamos un diccionario para guardar los datos actualizados
     nuevos_vectorstore = {}
 
-    def procesar_url(url, tipo):
+    async def procesar_url(url, tipo):
         """
         Función para realizar el procesamiento de la url en función de su tipo
 
@@ -391,7 +396,7 @@ def procesar_una_pagina_y_recursos(url_principal):
             # Para cada uno de los chunks creamos la representación vectorial y lo guardamos en un diccionario
             # junto al texto que le corresponde (el texto que había en el chunk).
             for chunk in chunks:
-                embedding = obtener_embedding_ollama(chunk)
+                embedding = await obtener_embedding_ollama(chunk)
                 chunks_con_embeddings.append({
                     "texto": chunk,
                     "embedding": embedding
@@ -434,5 +439,5 @@ if __name__ == "__main__":
     url_inicial = "https://doctorado.us.es/estudios/programas-de-doctorado"
     print("⏳ Procesando página y recursos, por favor espera...")
     # Llamamos a la función anterior pasandole la url principal.
-    vectorstore = procesar_una_pagina_y_recursos(url_inicial)
+    vectorstore =  asyncio.run(procesar_una_pagina_y_recursos(url_inicial))
     print("✅ Vectorstore cargado y actualizado.")

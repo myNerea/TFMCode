@@ -1,12 +1,12 @@
-import requests
+import aiohttp
 import json
-import time
+import asyncio
 import numpy as np
 from utils.embedding import obtener_embedding_ollama
 from utils.rag_search import similitud_coseno
 
 
-def obtener_score_llm(pregunta, chunk, modelo_llm="llama3.2"):
+async def obtener_score_llm(pregunta, chunk, modelo_llm="llama3.2"):
     """
     Usamos un modelo LLM para determinar si los chunks que devolvemos son utiles para responder la pregunta.
     Aquí lo que tenemos en cuenta es la relación semántica entre la pregunta y los chunks devueltos, obteniendo
@@ -31,17 +31,19 @@ def obtener_score_llm(pregunta, chunk, modelo_llm="llama3.2"):
     }
 
     try:
-        response = requests.post("http://localhost:11434/api/chat", json=data, timeout=3000)
-        respuesta = ""
-        for line in response.iter_lines(decode_unicode=True):
-            if not line:
-                continue
-            try:
-                json_data = json.loads(line)
-                content = json_data.get("message", {}).get("content", "")
-                respuesta += content
-            except json.JSONDecodeError:
-                continue
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as session:
+            async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                respuesta = ""
+                async for line in response.content:
+                    line = line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    try:
+                        json_data = json.loads(line)
+                        content = json_data.get("message", {}).get("content", "")
+                        respuesta += content
+                    except json.JSONDecodeError:
+                        continue
 
         # Lo convertimos a número real, quitandole espacios delante y detrás y sustituyendo las comas por puntos
         valor = float(respuesta.strip().replace(",", "."))
@@ -52,7 +54,7 @@ def obtener_score_llm(pregunta, chunk, modelo_llm="llama3.2"):
         return 0.0
 
 
-def rerank_hibrido(pregunta, chunks, umbral=0.5, modelo_embedding="mxbai-embed-large", modelo_llm="llama3.2", verbose=False):
+async def rerank_hibrido(pregunta, chunks, umbral=0.5, modelo_embedding="mxbai-embed-large", modelo_llm="llama3.2", verbose=False):
     """
     Reordena y filtra chunks combinando similitud por embedding + score LLM.
     
@@ -69,7 +71,7 @@ def rerank_hibrido(pregunta, chunks, umbral=0.5, modelo_embedding="mxbai-embed-l
     """
 
     # Usamos la funcion de embedding.py para obtener la representación vectorial de la pregunta
-    pregunta_emb = obtener_embedding_ollama(pregunta, modelo=modelo_embedding)
+    pregunta_emb = await obtener_embedding_ollama(pregunta, modelo=modelo_embedding)
     resultados = []
 
     # Para cada uno de los chunks vemos si trae dos o tres elementos y en función de ello devolvemos una cosa
@@ -83,7 +85,7 @@ def rerank_hibrido(pregunta, chunks, umbral=0.5, modelo_embedding="mxbai-embed-l
             url = None  # Si no hay URL, la dejamos como None
         
         score_embedding = similitud_coseno(pregunta_emb, emb_chunk)
-        score_llm = obtener_score_llm(pregunta, chunk_text, modelo_llm)
+        score_llm = await obtener_score_llm(pregunta, chunk_text, modelo_llm)
         score_medio = (score_embedding + score_llm) / 2
 
     
@@ -96,7 +98,7 @@ def rerank_hibrido(pregunta, chunks, umbral=0.5, modelo_embedding="mxbai-embed-l
         # Los añadimos con su url, el texto y el score medio
         resultados.append((url, chunk_text, score_medio))
 
-        time.sleep(0.3)  # evitar sobresaturación del LLM
+        await asyncio.sleep(0.3)  # evitar sobresaturación del LLM
 
     # Filtrar y ordenar
     # Cogemos solo aquellos que tengan un score mayor que el umbral

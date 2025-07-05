@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 import requests
-
+import aiohttp
 from utils.rag_search import buscar_chunks_relevantes
 from utils.reranker import rerank_hibrido
 from utils.respuesta_distinta import son_parecidas_llm 
@@ -14,7 +14,7 @@ class ChatDoctorado:
         self.historial = historial if historial is not None else []
 
         self.json_log_path = os.path.join("logs", "log_preguntas_sin_respuesta.json")
-        self.log_path = "log_preguntas_sin_respuesta.txt"
+        self.log_path = os.path.join("logs", "log_preguntas_sin_respuesta.txt")
         os.makedirs("logs", exist_ok=True)
 
     # Creamos una función para guardar las veces que no obtiene una respuesta el usuario, debido a que no se devuelvan
@@ -59,7 +59,7 @@ class ChatDoctorado:
                 json.dump(data, jf, ensure_ascii=False, indent=2)
 
 
-    def obtener_respuesta_llama(self, pregunta, contexto, contexto_previo=None, modelo="llama3.2"):
+    async def obtener_respuesta_llama(self, pregunta, contexto, contexto_previo=None, modelo="llama3.2"):
         """
         Esta función se encarga de realizar la parte generativa del RAG.
         Recibe, la pregunta del usuario, el historial previo de la conversación, los chunks devueltos por el 
@@ -89,20 +89,22 @@ class ChatDoctorado:
                 {"role": "user", "content": prompt}
             ]
         }
-
+        timeout = aiohttp.ClientTimeout(total=3000)
         # Hacemos la llamada al modelo
         try:
-            response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-            respuesta_llama = ""
-            for line in response.iter_lines(decode_unicode=True):
-                if not line:
-                    continue
-                try:
-                    json_data = json.loads(line)
-                    contenido = json_data.get("message", {}).get("content", "")
-                    respuesta_llama += contenido
-                except json.JSONDecodeError:
-                    continue
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                    respuesta_llama = ""
+                    async for line in response.content:
+                        line = line.decode("utf-8").strip()
+                        if not line:
+                            continue
+                        try:
+                            json_data = json.loads(line)
+                            contenido = json_data.get("message", {}).get("content", "")
+                            respuesta_llama += contenido
+                        except json.JSONDecodeError:
+                            continue
 
             # Comprobamos si el modelo ha devuelto una respuesta vacia.
             if respuesta_llama.strip() == "":
@@ -127,7 +129,7 @@ class ChatDoctorado:
                 # o no la respuesta dada a la respuesta anterior.
                 # Esto nos dará un True o un False, en el caso de que sean parecidas o en el caso de que no
                 # Si son parecidas, es decir, devuelve True, entonces entramos en el if.
-                if son_parecidas_llm(ultima_respuesta, respuesta_llama, modelo=modelo):
+                if await son_parecidas_llm(ultima_respuesta, respuesta_llama, modelo=modelo):
                     print("🔁 Respuesta parecida detectada. Solicitando una alternativa...")
                     # Añadimos una nueva instrucción al modelo para que genere la respuesta de forma distinta
                     prompt_partes.append("Por favor, da una respuesta distinta o con otro enfoque.")
@@ -135,17 +137,19 @@ class ChatDoctorado:
                     data["messages"][-1]["content"] = prompt
 
                     # Volvemos a hacer la llamada al modelo con el nuevo prompt
-                    response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-                    respuesta_llama = ""
-                    for line in response.iter_lines(decode_unicode=True):
-                        if not line:
-                            continue
-                        try:
-                            json_data = json.loads(line)
-                            contenido = json_data.get("message", {}).get("content", "")
-                            respuesta_llama += contenido
-                        except json.JSONDecodeError:
-                            continue
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                            respuesta_llama = ""
+                            async for line in response.content:
+                                line = line.decode("utf-8").strip()
+                                if not line:
+                                    continue
+                                try:
+                                    json_data = json.loads(line)
+                                    contenido = json_data.get("message", {}).get("content", "")
+                                    respuesta_llama += contenido
+                                except json.JSONDecodeError:
+                                    continue
             
             # Devolvemos la respuesta del modelo.
             # Si hubo respuesta y no era parecida a una anterior, devuelve esa respuesta
@@ -155,7 +159,7 @@ class ChatDoctorado:
         except requests.exceptions.RequestException as e:
             return f"❌ Error en la llamada al modelo Llama: {e}"
 
-    def generar_respuesta_fallback(self, pregunta, modelo="llama3.2"):
+    async def generar_respuesta_fallback(self, pregunta, modelo="llama3.2"):
         """
         Esta función usa un modelo de lenguaje para devolver una respuesta general al usuario en caso de
         que no se haya encontrado documentos relevantes. 
@@ -179,17 +183,19 @@ class ChatDoctorado:
         }
 
         try:
-            response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-            respuesta = ""
-            for line in response.iter_lines(decode_unicode=True):
-                if not line:
-                    continue
-                try:
-                    json_data = json.loads(line)
-                    content = json_data.get("message", {}).get("content", "")
-                    respuesta += content
-                except json.JSONDecodeError:
-                    continue
+            async with aiohttp.ClientSession() as session:
+                async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                    respuesta = ""
+                    async for line in response.content:
+                        line = line.decode("utf-8").strip()
+                        if not line:
+                            continue
+                        try:
+                            json_data = json.loads(line)
+                            content = json_data.get("message", {}).get("content", "")
+                            respuesta += content
+                        except json.JSONDecodeError:
+                            continue
 
             # Devuelve la respuesta del modelo sin espacios delante o detrás.
             return respuesta.strip()
@@ -200,7 +206,7 @@ class ChatDoctorado:
                 "Puedes reformular tu pregunta o consultar la web oficial de la Universidad de Sevilla."
             )
 
-    def buscar_respuesta(self, pregunta, vectorstore, contexto_previo=None, top_k=3):
+    async def buscar_respuesta(self, pregunta, vectorstore, contexto_previo=None, top_k=3):
         """
         Busca los chunks relevantes para la pregunta y a partir de ellos le da la respuesta generativa al usuario.
         Recibe:
@@ -212,7 +218,7 @@ class ChatDoctorado:
         """
         # Llamamos a la función de rag_search.py
         # Esta función nos devuelve una tupla con la url y el texto
-        chunks_raw = buscar_chunks_relevantes(pregunta, vectorstore, top_k=top_k)
+        chunks_raw = await buscar_chunks_relevantes(pregunta, vectorstore, top_k=top_k)
         print("\n🧾 Chunks iniciales devueltos por la búsqueda:")
         # Para cada uno de los documentos imprimimos por pantalla su posición (el primero que se devuelva será
         # el primero que hayamos guardado), la url y el texto (solo una parte para no saturar).
@@ -221,13 +227,13 @@ class ChatDoctorado:
             print(f"[{i}] Chunk {i} ID: {doc_url}\n{chunk_texto[:300]}...\n")
 
         # Llamamos a la funcion de reranker.py para realizar el re-ranking de los chunks obtenidos
-        chunks_rankeados = rerank_hibrido(pregunta, chunks=[(chunk_text, embedding) for _, chunk_text, embedding in chunks_raw], umbral=0.5, verbose=True)
+        chunks_rankeados = await rerank_hibrido(pregunta, chunks=[(chunk_text, embedding) for _, chunk_text, embedding in chunks_raw], umbral=0.5, verbose=True)
 
         # Si no se ha devuelto nada, mostramos un mensaje por pantalla que indica que ningún chunk supero el umbral
         if not chunks_rankeados:
             print("\n❌ Ningún chunk superó el umbral. Generando respuesta alternativa.")
             # usamos la función definida previamente para devolverle una respuesta generica la usuario.
-            fallback = self.generar_respuesta_fallback(pregunta)
+            fallback = await self.generar_respuesta_fallback(pregunta)
             # Añadimos la pregunta y la repuesta al historial
             self.historial.append({
                 "pregunta":pregunta, 
@@ -235,7 +241,7 @@ class ChatDoctorado:
                 }) 
             # Añadimos la pregunta al registro de las sin respuesta
             self.registrar_sin_respuesta(pregunta, fallback, contexto="")
-            return fallback
+            return fallback, []
         
         #En caso de si haber chunks relevantes
 
@@ -249,7 +255,7 @@ class ChatDoctorado:
         print(contexto)
 
         # Llamamos a la función definida anteriormente para que nos de la respuesta del modelo.
-        respuesta = self.obtener_respuesta_llama(pregunta, contexto, contexto_previo=contexto_previo)
+        respuesta = await self.obtener_respuesta_llama(pregunta, contexto, contexto_previo=contexto_previo)
 
        # Añadimos la respuesta al historial junto con la pregunta
         self.historial.append({

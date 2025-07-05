@@ -1,4 +1,4 @@
-import requests
+import aiohttp
 import json
 
 # Lo creamos como clase para que se pueda usar en varias funciones dentro del agente decisor.
@@ -17,7 +17,7 @@ class ResumidorLlama:
         self.url_api = url_api
 
         # La siguiente función obtiene el historial previo.
-    def obtener_contexto_previo(self, historial, resumen_historial_anterior):
+    async def obtener_contexto_previo(self, historial, resumen_historial_anterior):
         """
         Función para obtener el historial previo resumido.
         
@@ -33,11 +33,11 @@ class ResumidorLlama:
             f"Tú: {preg}\nAsistente: {resp}" for preg, resp in historial
         )
         # Devuelve el texto anterior resumido usando el resumidor
-        historial_resumido = self.resumir(texto_historial,resumen_historial_anterior)
+        historial_resumido = await self.resumir(texto_historial,resumen_historial_anterior)
         print(f"📄 Resumen del historial del usuario: {historial_resumido}")
         return historial_resumido
 
-    def resumir(self, texto_largo, resumen_historial_anterior):
+    async def resumir(self, texto_largo, resumen_historial_anterior):
         """
         Generamos el resumen a partir del texto dado por el usuario.
 
@@ -62,20 +62,22 @@ class ResumidorLlama:
         # Realiza la petición POST, enviando data en el cuerpo del mensaje, el cual automaticamente se convierte en objeto JSON.
         # Esto se hace indicando primero la url a la que se le va a hacer la llamada y posteriormente como será el 
         # cuerpo de la llama, lo cual ha sido definido en la línea de arriba.
-        response = requests.post(self.url_api, json=data, headers=headers, stream=True)
-
-        if response.status_code == 200:
-            resumen = ""
-            for line in response.iter_lines():
-                if line:
-                    try:
-                        parsed = json.loads(line.decode("utf-8"))
-                        content = parsed.get("message", {}).get("content", "")
-                        resumen += content
-                    except json.JSONDecodeError as e:
-                        print(f"❌ Error decodificando JSON: {e}")
-            # Devolvemos el resumen sin espacios delante o detrás.
-            return resumen.strip()
-        else:
-            print(f"Error al resumir texto: {response.status_code}")
-            return ""
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.url_api, json=data, headers=headers) as response:
+                if response.status == 200:
+                    resumen = ""
+                    async for line in response.content:
+                        line = line.decode("utf-8").strip()
+                        if line:
+                            try:
+                                parsed = json.loads(line.decode("utf-8"))
+                                content = parsed.get("message", {}).get("content", "")
+                                resumen += content
+                            except json.JSONDecodeError as e:
+                                print(f"❌ Error decodificando JSON: {e}")
+                    # Devolvemos el resumen sin espacios delante o detrás.
+                    return resumen.strip()
+                else:
+                    print(f"Error al resumir texto: {response.status_code}")
+                    return ""

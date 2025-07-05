@@ -1,9 +1,9 @@
 import numpy as np
 import json
-import requests
+import aiohttp
 from utils.embedding import obtener_embedding_ollama  
 
-def obtener_todos_los_chunks_relevantes(pregunta, vectorstore, umbral_similitud=0.75, modelo="mxbai-embed-large"):
+async def obtener_todos_los_chunks_relevantes(pregunta, vectorstore, umbral_similitud=0.75, modelo="mxbai-embed-large"):
     """
     Obtenemos todos los chunks que superan un cierto umbral sin hacer una posterior selección con re-ranking
     Recibe:
@@ -15,7 +15,7 @@ def obtener_todos_los_chunks_relevantes(pregunta, vectorstore, umbral_similitud=
     
     """
     # Realizamos el embedding de la pregunta
-    emb_pregunta = np.array(obtener_embedding_ollama(pregunta, modelo)).astype("float32")
+    emb_pregunta = np.array(await obtener_embedding_ollama(pregunta, modelo)).astype("float32")
     chunks_encontrados = []
 
     # Buscamos los chunks dentro de la vectorstore, le calculamos la medida de similitud que en este caso será
@@ -30,7 +30,7 @@ def obtener_todos_los_chunks_relevantes(pregunta, vectorstore, umbral_similitud=
     return chunks_encontrados
 
 
-def evaluar_respuesta_con_llm(pregunta, respuesta_rag, chunks_rag, chunks_reranking, chunks_relevantes, modelo="llama3.2"):
+async def evaluar_respuesta_con_llm(pregunta, respuesta_rag, chunks_rag, chunks_reranking, chunks_relevantes, modelo="llama3.2"):
     """
     Esta función recibe los chunks usados en el rag, los usados en el reranking y los considerados relevantes
     Devuelve un JSON con la evaluación de un modelo LLM de la respuesta dada por el sistema RAG
@@ -93,16 +93,19 @@ Recuerda: {instrucciones}
     # Creamos la variable para guardar la respuesta del modelo
     respuesta_llm = ""
     try:
-        response = requests.post(url_api, json=data, stream=True)
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                try:
-                    json_data = json.loads(line)
-                    contenido = json_data.get("message", {}).get("content", "")
-                    # Guardamos la respuesta del modelo
-                    respuesta_llm += contenido
-                except json.JSONDecodeError:
-                    continue
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url_api, json=data) as response:
+            
+                async for line in response.content:
+                    line = line.decode("utf-8").strip()
+                    if line:
+                        try:
+                            json_data = json.loads(line)
+                            contenido = json_data.get("message", {}).get("content", "")
+                            # Guardamos la respuesta del modelo
+                            respuesta_llm += contenido
+                        except json.JSONDecodeError:
+                            continue
     # Si hya un error devolvemos el codigo de error, los chunks pero no se devuelve la evaluacion            
     except Exception as e:
         return {

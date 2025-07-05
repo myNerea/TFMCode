@@ -1,8 +1,8 @@
-import requests
+import aiohttp
 import json
 import re
 
-def detectar_idioma_llm(texto, modelo="llama3.2"):
+async def detectar_idioma_llm(texto, modelo="llama3.2"):
     """
     Mediante un modelo Llama3.2 determina el idioma en el que principal en el que venía un texto y si este 
     contenía o no una mezlca de idiomas.
@@ -57,21 +57,23 @@ Texto a analizar:
     }
 
     try:
-        response = requests.post("http://localhost:11434/api/chat", json=data, stream=True)
-        response.raise_for_status()
-        # Lanza un error y evita que el resto se ejecuta si la petición obtuvo algún código de error
+        async with aiohttp.ClientSession() as session:
+            async with session.post("http://localhost:11434/api/chat", json=data) as response:
+                response.raise_for_status()
+                # Lanza un error y evita que el resto se ejecuta si la petición obtuvo algún código de error
 
-        contenido_completo = ""
+                contenido_completo = ""
 
-        for line in response.iter_lines(decode_unicode=True):
-            if not line:
-                continue
-            try:
-                json_data = json.loads(line)
-                contenido = json_data.get("message", {}).get("content", "")
-                contenido_completo += contenido
-            except json.JSONDecodeError:
-                continue
+                async for line in response.content:
+                    line = line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    try:
+                        json_data = json.loads(line)
+                        contenido = json_data.get("message", {}).get("content", "")
+                        contenido_completo += contenido
+                    except json.JSONDecodeError:
+                        continue
 
         # Extraer el JSON usando regex
         # Esto nos devuelve el JSON que encuentre, ya que el modelo podía devolver más texto aparte, 

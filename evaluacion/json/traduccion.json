@@ -94,5 +94,61 @@
     "respuesta": "Buenos días Periquito! Me alegra poder ayudarte.\n\nDonald Trump es un nombre muy conocido en el mundo actual. Sin embargo, como asistente, mi dominio de conocimiento se centra principalmente en temas académicos y de investigación, específicamente en el ámbito del doctorado en la Universidad de Sevilla (US).\n\nSi buscas información sobre Donald Trump, te recomiendo buscar en fuentes confiables como Wikipedia, BBC News o otros medios de comunicación que cubren noticias internacionales. También puedes consultar libros de historia o biografías que aborden su vida y carrera.\n\nSin embargo, si necesitas ayuda con algo relacionado con el doctorado en la US, estaré encantado de ayudarte. ¿En qué área del doctorado estás interesado?",
     "respuesta_traducida": "\"Buenos días Periquito! Me alegra poder ayudarte.\n\nDonald Trump es un nombre muy conocido en el mundo actual. Sin embargo, como asistente, mi dominio de conocimiento se centra principalmente en temas académicos y de investigación, específicamente en el ámbito del doctorado en la Universidad de Sevilla (US).\n\nSi buscas información sobre Donald Trump, te recomiendo buscar en fuentes confiables como Wikipedia, BBC News o otros medios de comunicación que cubren noticias internacionales. También puedes consultar libros de historia o biografías que aborden su vida y carrera.\n\nSin embargo, si necesitas ayuda con algo relacionado con el doctorado en la US, estaré encantado de ayudarte. ¿En qué área del doctorado estás interesado?\"",
     "score_respuesta": 0.9729
+  },
+  {
+    "pregunta_original": "Hello",
+    "pregunta_traducida": "Hola",
+    "score_pregunta": 0.6879,
+    "respuesta_original": "¡Hola! ¿En qué puedo ayudarte?",
+    "respuesta_traducida": "Hola, ¿en qué puedo ayudarte?",
+    "score_respuesta": 0.984
+  },
+  {
+    "pregunta_original": "Hello",
+    "pregunta_traducida": "Hola",
+    "score_pregunta": 0.6879,
+    "respuesta_original": "¡Hola! ¿En qué puedo ayudarte?",
+    "respuesta_traducida": "Hola, ¿en qué necesitas ayuda?",
+    "score_respuesta": 0.8087
+  },
+  {
+    "pregunta_original": "Hello",
+    "pregunta_traducida": "Hola",
+    "score_pregunta": 0.6879,
+    "respuesta_original": "¡Hola! ¿En qué puedo ayudarte?",
+    "respuesta_traducida": "Hola, ¿en qué puedo ayudarte?",
+    "score_respuesta": 0.984
+  },
+  {
+    "pregunta_original": "Hello",
+    "pregunta_traducida": "Hola",
+    "score_pregunta": 0.6879,
+    "respuesta_original": "¡Hola! ¿En qué puedo ayudarte?",
+    "respuesta_traducida": "Hola, en qué puedo ayudarte.",
+    "score_respuesta": 0.9349
+  },
+  {
+    "pregunta_original": "Hello",
+    "pregunta_traducida": "Hola",
+    "score_pregunta": 0.6879,
+    "respuesta_original": "¡Hola! ¿En qué puedo ayudarte?",
+    "respuesta_traducida": "Hola, ¿en qué puedo ayudarte?",
+    "score_respuesta": 0.984
+  },
+  {
+    "pregunta_original": "can you repeat it in a different way?",
+    "pregunta_traducida": "¿Puedes repetirlo de una manera diferente?",
+    "score_pregunta": 0.568,
+    "respuesta_original": "**Requisitos para acceder a un programa de doctorado**\n\n¡Hola! Si estás interesado en postularse a un programa de doctorado, es importante que sepas qué requisitos comunes se esperan.\n\nNormalmente, los programas de doctorado requieren:\n\n*   **Título universitario relevante**: Debes tener un título universitario (bachiller o licenciatura) relacionado con el campo de estudio del programa.\n*   **Calificaciones adecuadas y/o experiencia laboral**: Es importante tener calificaciones promedias buenas y/o una nota alta en las materias relevantes. También se valorará tu experiencia laboral o de investigación relevante en el campo de estudio.\n*   **Requisitos lingüísticos**: Debes demostrar la capacidad de realizar la investigación en el idioma del país donde se realiza la tesis.\n\n**Importante:** Cada programa de doctorado puede tener sus propios requisitos específicos, así que es importante investigar y verificar las necesidades exactas para cada programa a lo que te postulas.",
+    "respuesta_traducida": "Requisitos para acceder a un programa de doctorado\n\n¡Hola! Si estás interesado en postularse a un programa de doctorado, es importante que sepas qué requisitos comunes se esperan.\n\nNormalmente, los programas de doctorado requieren:\n\n*   Título universitario relevante: Debes tener un título universitario (bachiller o licenciatura) relacionado con el campo de estudio del programa.\n*   Calificaciones adecuadas y/o experiencia laboral: Es importante tener calificaciones promedio buenas y/o una nota alta en las materias relevantes. También se valorará tu experiencia laboral o de investigación relevante en el campo de estudio.\n*   Requisitos lingüísticos: Debes demostrar la capacidad de realizar la investigación en el idioma del país donde se realiza la tesis.\n\nEs importante que cada programa de doctorado puede tener sus propios requisitos específicos, así que es importante investigar y verificar las necesidades exactas para cada programa a lo que te postulas.",
+    "score_respuesta": 0.9846
+  },
+  {
+    "pregunta_original": "Who is donald trump?",
+    "pregunta_traducida": "Quién es Donald Trump.",
+    "score_pregunta": 0.6721,
+    "respuesta_original": "Lo siento mucho, pero no puedo proporcionar información sobre figuras públicas externas. Mi conocimiento se limita a temas relacionados con la Universidad de Sevilla (US) y temas universitarios en general. Si estás buscando información sobre el presidente estadounidense, podrías considerar consultar fuentes confiables como BBC, CNN o otros medios noticieros. También puedo ayudarte con cualquier pregunta relacionada con la Universidad de Sevilla o sus programas académicos si deseas.",
+    "respuesta_traducida": "Lo siento mucho, pero no puedo proporcionar información sobre figuras públicas externas. Mi conocimiento se limita a temas relacionados con la Universidad de Sevilla y temas universitarios en general. Si estás buscando información sobre el presidente estadounidense, podrías considerar consultar fuentes confiables como BBC, CNN o otros medios noticieros. También puedo ayudarte con cualquier pregunta relacionada con la Universidad de Sevilla o sus programas académicos si deseas.",
+    "score_respuesta": 0.9976
   }
 ]

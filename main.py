@@ -15,7 +15,7 @@ Puedo ayudarte con:
 **¿En qué puedo ayudarte hoy?**
 """
 
-agente = AgenteDecisor(top_k=1)
+agente = AgenteDecisor(top_k=10)
 
 @cl.on_chat_start
 async def on_chat_start():
